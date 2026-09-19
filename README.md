@@ -1,4 +1,4 @@
-# TimeTrack
+# TimeTrack MCP Server
 
 TimeTrack is a time-tracking application with:
 
@@ -6,67 +6,66 @@ TimeTrack is a time-tracking application with:
 - A REST API backed by SQLite.
 - An MCP server with tools, a resource, and a prompt.
 
-The website and MCP server use the same `timetrack.db` database.
+The website and MCP server use the same local `timetrack.db` database.
 
 ## Requirements
 
 - Python 3.11 or newer
-- `uv`
-- Node.js and `npx` only if you want to use MCP Inspector
+- `pip` or `uv`
+- Node.js and `npx` for MCP Inspector
 
 Check the installed tools:
 
 ```bash
 python --version
-uv --version
+pip --version
 node --version
+npx --version
 ```
 
-## 1. Open the project
+## Quickstart
 
-From Git Bash or a terminal:
+Clone the repository and enter its directory:
 
 ```bash
-cd ~/Agentic_AI_AGENTOPS/Class7_MCP/timetrack_mcp_project
+git clone https://github.com/VISHAL0713/time-track-mcp-server.git
+cd time-track-mcp-server
 ```
 
-On Windows PowerShell:
+Create and activate a virtual environment:
+
+```bash
+python -m venv .venv
+```
+
+Windows PowerShell:
 
 ```powershell
-cd C:\Users\visha\Agentic_AI_AGENTOPS\Class7_MCP\timetrack_mcp_project
+.\.venv\Scripts\Activate.ps1
 ```
 
-## 2. Install dependencies
-
-Run this from the `Class7_MCP` folder, where `pyproject.toml` is located:
+macOS/Linux:
 
 ```bash
-cd ..
-uv sync
-cd timetrack_mcp_project
+source .venv/bin/activate
 ```
 
-The required packages are FastAPI, FastMCP, and Uvicorn.
-
-## 3. Create the database
-
-The database is initialized automatically when `main.py` starts. To create it before starting the server, run:
+Install the application dependencies:
 
 ```bash
-uv run python database_load.py
+python -m pip install --upgrade pip
+python -m pip install fastapi fastmcp "uvicorn[standard]"
 ```
 
-This creates `timetrack.db` beside `database_load.py` and inserts the sample entries if the table is empty.
-
-## 4. Start the web and HTTP MCP server
-
-Use port `8000`:
+Start the combined web, REST API, and MCP server on port `8000`:
 
 ```bash
-uv run uvicorn main:app --host 127.0.0.1 --port 8000
+uvicorn main:app --host 127.0.0.1 --port 8000
 ```
 
-Keep this terminal running. Open these URLs in a browser:
+When `main.py` starts, it initializes `timetrack.db` automatically and inserts the sample entries if the table is empty. You do not need to create the database separately. The database is local runtime data and is ignored by Git. If you need to initialize it manually before starting the server, you can run `python database_load.py`.
+
+Open these URLs:
 
 - Website: <http://127.0.0.1:8000>
 - API documentation: <http://127.0.0.1:8000/docs>
@@ -74,9 +73,9 @@ Keep this terminal running. Open these URLs in a browser:
 
 The MCP endpoint uses **Streamable HTTP**.
 
-## 5. Connect MCP Inspector using port 8000
+## Connect MCP Inspector
 
-Open a second terminal and run:
+Keep the server running and open a second terminal:
 
 ```bash
 npx @modelcontextprotocol/inspector@2.5.0
@@ -85,50 +84,36 @@ npx @modelcontextprotocol/inspector@2.5.0
 In MCP Inspector:
 
 1. Select **Streamable HTTP** as the transport.
-2. Enter this URL:
-
-```text
-http://127.0.0.1:8000/mcp
-```
-
+2. Enter `http://127.0.0.1:8000/mcp`.
 3. Connect to the server.
 
-You should see these MCP components:
+Available MCP components:
 
-- `log_time`
-- `get_timesheet`
-- `get_project_summary`
-- `list_projects`
-- `timesheet://projects`
-- `generate_weekly_report`
+- Tools: `log_time`, `get_timesheet`, `get_project_summary`, `list_projects`
+- Resource: `timesheet://projects`
+- Prompt: `generate_weekly_report`
 
-Do not use `npx ... inspector uv run python main.py` when connecting to port `8000`. That command uses the stdio transport, while this project is already running as an HTTP server.
+## Run MCP in stdio mode
 
-## 6. Use MCP in stdio mode instead
-
-If you want Inspector to launch the MCP process directly, stop the Uvicorn server first, then run:
+To let Inspector launch the MCP process directly, stop the Uvicorn server and run:
 
 ```bash
-npx @modelcontextprotocol/inspector@2.5.0 uv run python main.py
+npx @modelcontextprotocol/inspector@2.5.0 python main.py
 ```
 
-Use this mode only when you are not connecting to `http://127.0.0.1:8000/mcp`.
+Use this mode instead of connecting Inspector to the HTTP endpoint.
 
-## 7. Start the MCP server directly over HTTP on port 8001
+## Run MCP directly over HTTP
 
-To run only the MCP server with Streamable HTTP instead of stdio, use:
+To run only the MCP server on port `8001`:
 
 ```bash
 uv run fastmcp run main.py --transport http --host 127.0.0.1 --port 8001
 ```
 
-Connect MCP Inspector to:
+Connect Inspector to `http://127.0.0.1:8001/mcp`.
 
-```text
-http://127.0.0.1:8001/mcp
-```
-
-## Useful API commands
+## REST API examples
 
 List all entries:
 
@@ -152,36 +137,32 @@ Log time:
 
 ```bash
 curl -X POST http://127.0.0.1:8000/api/entries \
-	-H "Content-Type: application/json" \
-	-d '{"employee_name":"Asha Patel","project":"Website Redesign","entry_date":"2026-09-17","hours":2.5,"description":"Updated the dashboard"}'
+  -H "Content-Type: application/json" \
+  -d '{"employee_name":"Asha Patel","project":"Website Redesign","entry_date":"2026-09-17","hours":2.5,"description":"Updated the dashboard"}'
 ```
 
 ## Troubleshooting
 
 ### Port 8000 is already in use
 
-Only run one server on port `8000`. Stop the existing Uvicorn process with `Ctrl+C`, then start it again:
+Stop the running server with `Ctrl+C`, then start it again. Or use another port:
 
 ```bash
-uv run uvicorn main:app --host 127.0.0.1 --port 8000
+uvicorn main:app --host 127.0.0.1 --port 8001
 ```
 
-Or use another port:
-
-```bash
-uv run uvicorn main:app --host 127.0.0.1 --port 8001
-```
-
-If you use another port, connect Inspector to `http://127.0.0.1:8001/mcp`.
+Update the browser and Inspector URL to use the selected port.
 
 ### Inspector says `Connection closed`
 
-For the port `8000` setup, make sure:
+For the HTTP setup, verify that:
 
 1. Uvicorn is still running.
 2. Inspector transport is **Streamable HTTP**.
-3. The Inspector URL is exactly `http://127.0.0.1:8000/mcp`.
+3. The Inspector URL matches the server port and ends with `/mcp`.
 
 ### The website does not load
+
+Confirm that you started the server from the repository root, where `main.py` and the `static` directory are located.
 
 
