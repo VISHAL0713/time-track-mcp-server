@@ -1,0 +1,21 @@
+[project]
+name = "time-track-mcp-server"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "VISHAL0713", email = "vgv0907@gmail.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.141.1",
+    "fastmcp>=4.0.3",
+    "uvicorn[standard]>=0.52.4",
+]
+
+[project.scripts]
+class7-mcp = "class7_mcp:main"
+
+[build-system]
+requires = ["uv_build>=0.12.9,<0.13.0"]
+build-backend = "uv_build"
