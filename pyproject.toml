@@ -13,9 +13,9 @@ dependencies = [
     "uvicorn[standard]>=0.52.4",
 ]
 
-[project.scripts]
-class7-mcp = "class7_mcp:main"
-
 [build-system]
 requires = ["uv_build>=0.12.9,<0.13.0"]
 build-backend = "uv_build"
+
+[tool.uv]
+package = false
