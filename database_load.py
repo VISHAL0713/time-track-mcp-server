@@ -4,24 +4,22 @@ server, exactly like RecipeBox's was. One real, professional use case this
 time: logging billable hours against projects, and summarizing them.
 """
 
-import sqlite3
+import aiosqlite
 from pathlib import Path
 
 
 DB_PATH = Path(__file__).parent / "timetrack.db"
 
 
-def get_db_connection():
-    """
-    Returns a new connection to the SQLite database.
-    """
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+async def get_db_connection():
+    conn = await aiosqlite.connect(DB_PATH)
+    conn.row_factory = aiosqlite.Row
     return conn
 
-def initialize_db():
-    conn = get_db_connection()
-    conn.execute("""
+
+async def initialize_db():
+    conn = await get_db_connection()
+    await conn.execute("""
         CREATE TABLE IF NOT EXISTS time_entries (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             employee_name TEXT NOT NULL,
@@ -31,7 +29,8 @@ def initialize_db():
             description TEXT NOT NULL DEFAULT ''
         )
     """)
-    count = conn.execute("SELECT COUNT(*) FROM time_entries").fetchone()[0]
+    cursor = await conn.execute("SELECT COUNT(*) FROM time_entries")
+    count = (await cursor.fetchone())[0]
     if count == 0:
         seed = [
             ("Asha Patel", "Website Redesign", "2026-09-08", 6.5, "Homepage layout"),
@@ -41,13 +40,13 @@ def initialize_db():
             ("Rahul Mehta", "Internal Tools", "2026-09-09", 8.0, "Dashboard bug fixes"),
             ("Vishal Vaibhav", "Agentic AI Platform", "2026-09-19", 20.0, "Initial setup and configuration"),
         ]
-        conn.executemany(
+        await conn.executemany(
             "INSERT INTO time_entries (employee_name, project, entry_date, hours, description) "
             "VALUES (?, ?, ?, ?, ?)",
             seed,
         )
-        conn.commit()
-    conn.close()
+        await conn.commit()
+    await conn.close()
 
 
 def row_to_dict(row) -> dict:
@@ -60,30 +59,32 @@ def row_to_dict(row) -> dict:
         "description": row["description"],
     }
     
-def list_all_entries() -> list[dict]:
-    conn = get_db_connection()
-    rows = conn.execute("SELECT * FROM time_entries ORDER BY entry_date DESC, id DESC").fetchall()
-    conn.close()
+async def list_all_entries() -> list[dict]:
+    conn = await get_db_connection()
+    cursor = await conn.execute("SELECT * FROM time_entries ORDER BY entry_date DESC, id DESC")
+    rows = await cursor.fetchall()
+    await conn.close()
     return [row_to_dict(row) for row in rows]
 
-def log_time(employee_name: str, project: str, entry_date: str, hours: float, description: str = "") -> dict:
+
+async def log_time(employee_name: str, project: str, entry_date: str, hours: float, description: str = "") -> dict:
     if hours <= 0:
         raise ValueError("hours must be a positive number")
-    conn = get_db_connection()
-    cursor = conn.execute(
+    conn = await get_db_connection()
+    cursor = await conn.execute(
         "INSERT INTO time_entries (employee_name, project, entry_date, hours, description) "
         "VALUES (?, ?, ?, ?, ?)",
         (employee_name, project, entry_date, hours, description),
     )
-    conn.commit()
-    new_id = cursor.lastrowid
-    row = conn.execute("SELECT * FROM time_entries WHERE id = ?", (new_id,)).fetchone()
-    conn.close()
+    await conn.commit()
+    cursor = await conn.execute("SELECT * FROM time_entries WHERE id = ?", (cursor.lastrowid,))
+    row = await cursor.fetchone()
+    await conn.close()
     return row_to_dict(row)
 
 
-def get_timesheet(employee_name: str, start_date: str | None = None, end_date: str | None = None) -> list[dict]:
-    conn = get_db_connection()
+async def get_timesheet(employee_name: str, start_date: str | None = None, end_date: str | None = None) -> list[dict]:
+    conn = await get_db_connection()
     query = "SELECT * FROM time_entries WHERE employee_name = ?"
     params: list = [employee_name]
     if start_date:
@@ -93,25 +94,29 @@ def get_timesheet(employee_name: str, start_date: str | None = None, end_date: s
         query += " AND entry_date <= ?"
         params.append(end_date)
     query += " ORDER BY entry_date"
-    rows = conn.execute(query, params).fetchall()
-    conn.close()
-    return [row_to_dict(r) for r in rows]
+    cursor = await conn.execute(query, params)
+    rows = await cursor.fetchall()
+    await conn.close()
+    return [row_to_dict(row) for row in rows]
 
-def list_projects() -> list[str]:
-    conn = get_db_connection()
-    rows = conn.execute("SELECT DISTINCT project FROM time_entries ORDER BY project").fetchall()
-    conn.close()
+
+async def list_projects() -> list[str]:
+    conn = await get_db_connection()
+    cursor = await conn.execute("SELECT DISTINCT project FROM time_entries ORDER BY project")
+    rows = await cursor.fetchall()
+    await conn.close()
     return [row["project"] for row in rows]
 
 
-def get_project_summary(project: str) -> dict:
-    conn = get_db_connection()
-    rows = conn.execute(
+async def get_project_summary(project: str) -> dict:
+    conn = await get_db_connection()
+    cursor = await conn.execute(
         "SELECT employee_name, SUM(hours) as total_hours FROM time_entries "
         "WHERE project = ? GROUP BY employee_name ORDER BY employee_name",
         (project,),
-    ).fetchall()
-    conn.close()
+    )
+    rows = await cursor.fetchall()
+    await conn.close()
     if not rows:
         raise ValueError(f"No time logged against project '{project}'")
     by_employee = {r["employee_name"]: r["total_hours"] for r in rows}

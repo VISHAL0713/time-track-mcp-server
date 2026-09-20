@@ -20,14 +20,12 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from fastmcp import FastMCP
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import database_load as db
 
 BASE_DIR = Path(__file__).parent
-
-# ---------- persistence, initialized once at startup ----------
-db.initialize_db()
 
 # ---------- Step 1: build the MCP server FIRST ----------
 # Hand-curated tools, calling the SAME database functions the REST API
@@ -36,33 +34,33 @@ mcp = FastMCP("TimeTrack")
 
 
 @mcp.tool
-def log_time(employee_name: str, project: str, entry_date: str, hours: float, description: str = "") -> dict:
+async def log_time(employee_name: str, project: str, entry_date: str, hours: float, description: str = "") -> dict:
     """Log a time entry. entry_date must be YYYY-MM-DD. Shows up on the website immediately."""
-    return db.log_time(employee_name, project, entry_date, hours, description)
+    return await db.log_time(employee_name, project, entry_date, hours, description)
 
 
 @mcp.tool
-def get_timesheet(employee_name: str, start_date: str = "", end_date: str = "") -> list[dict]:
+async def get_timesheet(employee_name: str, start_date: str = "", end_date: str = "") -> list[dict]:
     """Get one employee's logged entries, optionally filtered to a date range (YYYY-MM-DD)."""
-    return db.get_timesheet(employee_name, start_date or None, end_date or None)
+    return await db.get_timesheet(employee_name, start_date or None, end_date or None)
 
 
 @mcp.tool
-def get_project_summary(project: str) -> dict:
+async def get_project_summary(project: str) -> dict:
     """Get total hours logged against a project, broken down by employee."""
-    return db.get_project_summary(project)
+    return await db.get_project_summary(project)
 
 
 @mcp.tool
-def list_projects() -> list[str]:
+async def list_projects() -> list[str]:
     """List every project that has at least one logged time entry."""
-    return db.list_projects()
+    return await db.list_projects()
 
 
 @mcp.resource("timesheet://projects")
-def known_projects() -> list[str]:
+async def known_projects() -> list[str]:
     """The current set of projects with logged time, for consistent naming."""
-    return db.list_projects()
+    return await db.list_projects()
 
 
 @mcp.prompt
@@ -88,7 +86,14 @@ mcp_app = mcp.http_app(path="/")
 
 
 # ---------- Step 2: build the FastAPI app, lifespan wired in AT CONSTRUCTION ----------
-app = FastAPI(title="TimeTrack", lifespan=mcp_app.lifespan)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await db.initialize_db()
+    async with mcp_app.lifespan(app):
+        yield
+
+
+app = FastAPI(title="TimeTrack", lifespan=lifespan)
 
 
 class NewEntry(BaseModel):
@@ -100,28 +105,28 @@ class NewEntry(BaseModel):
 
 
 @app.get("/api/entries")
-def api_list_entries():
-    return db.list_all_entries()
+async def api_list_entries():
+    return await db.list_all_entries()
 
 
 @app.post("/api/entries")
-def api_log_entry(entry: NewEntry):
-    return db.log_time(entry.employee_name, entry.project, entry.entry_date, entry.hours, entry.description)
+async def api_log_entry(entry: NewEntry):
+    return await db.log_time(entry.employee_name, entry.project, entry.entry_date, entry.hours, entry.description)
 
 
 @app.get("/api/projects")
-def api_list_projects():
-    return db.list_projects()
+async def api_list_projects():
+    return await db.list_projects()
 
 
 @app.get("/api/projects/{project}/summary")
-def api_project_summary(project: str):
-    return db.get_project_summary(project)
+async def api_project_summary(project: str):
+    return await db.get_project_summary(project)
 
 
 @app.get("/api/timesheet/{employee_name}")
-def api_get_timesheet(employee_name: str, start_date: str = None, end_date: str = None):
-    return db.get_timesheet(employee_name, start_date, end_date)
+async def api_get_timesheet(employee_name: str, start_date: str = None, end_date: str = None):
+    return await db.get_timesheet(employee_name, start_date, end_date)
 
 
 @app.get("/")
